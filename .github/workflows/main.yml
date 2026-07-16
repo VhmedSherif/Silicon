@@ -1,46 +1,75 @@
-name: Get macOS Sequoia Screenshot (Direct Reveal)
-on: [push, workflow_dispatch]
+name: Capture macOS About Page
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      debug_session:
+        description: "Open an interactive tmate session instead of finishing automatically"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   take-screenshot:
     runs-on: macos-15
+    timeout-minutes: 30
+
     steps:
-      - name: Reveal About Pane and Emulate Keys
+      - name: Install click tool
         run: |
-          # 1. أمر النظام بفتح صفحة About مباشرة بدون كليكات
-          osascript -e '
-          tell application "System Settings"
-              activate
-              delay 3
-              reveal pane id "com.apple.About-Settings.extension"
-          end tell
-          '
-          sleep 5
+          brew update
+          brew install cliclick
 
-          # 2. خطوة احتياطية: كتابة About والضغط على Enter كأنك بتكتب بكيبورد حقيقي
-          osascript -e '
-          tell application "System Settings" to activate
-          delay 2
-          tell application "System Events"
-              -- كتابة الكلمة في خانة البحث
-              keystroke "About"
-              delay 2
-              -- الضغط على Enter لتحديد نتيجة البحث الأولى
-              key code 36
-              delay 2
-              -- الضغط على Enter مرة أخرى لفتح الصفحة
-              key code 36
-          end tell
-          '
-          sleep 5
-          
-      - name: Capture Screen
+      - name: Capture hardware diagnostics
         run: |
-          # 3. لقط الشاشة وحفظها
-          screencapture -x screenshot.png
+          mkdir -p artifacts
+          {
+            echo "sw_vers"
+            sw_vers
+            echo
+            echo "uname"
+            uname -a
+            echo
+            echo "CPU brand"
+            sysctl -n machdep.cpu.brand_string || true
+            echo
+            echo "Hardware overview"
+            system_profiler SPHardwareDataType
+          } | tee artifacts/hardware.txt
 
-      - name: Upload Artifact
+      - name: Open About pane and click About row
+        run: |
+          set -euxo pipefail
+
+          mkdir -p artifacts
+          open "x-apple.systempreferences:com.apple.About-Settings.extension"
+          sleep 10
+
+          screencapture -x artifacts/01-before-click.png
+          sips -g pixelWidth -g pixelHeight artifacts/01-before-click.png | tee artifacts/screenshot-size.txt
+
+          # macos-15 runners use a small fixed display. Avoid AppleScript UI events
+          # and send a direct Quartz mouse click to the known About row position.
+          cliclick m:500,395
+          sleep 1
+          cliclick c:500,395
+          sleep 8
+
+          screencapture -x artifacts/02-after-click.png
+          cp artifacts/02-after-click.png artifacts/screenshot.png
+
+      - name: Start interactive tmate session
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_session == 'true' }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mac-screenshot
-          path: screenshot.png
+          name: macos-about-capture
+          path: artifacts/
