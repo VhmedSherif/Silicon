@@ -105,7 +105,7 @@ jobs:
 
           erase((398, 304, 842, 326), row_bg)
           draw.text(scaled_point((400, 308)), "Name", font=regular, fill=dark)
-          draw.text(scaled_point((434, 308)), "Ahmed's Mac", font=regular, fill=value)
+          right_text((550, 304, 839, 326), "Ahmed's Mac", regular, value)
 
           erase((700, 341, 842, 363), row_bg)
           right_text((700, 341, 839, 363), "Apple M1", regular, value)
