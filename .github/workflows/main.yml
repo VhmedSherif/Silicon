@@ -21,7 +21,6 @@ jobs:
     steps:
       - name: Install click tool
         run: |
-          brew update
           brew install cliclick
 
       - name: Capture hardware diagnostics
@@ -49,18 +48,18 @@ jobs:
           open "x-apple.systempreferences:com.apple.About-Settings.extension"
           sleep 10
 
-          screencapture -x artifacts/01-before-click.png
-          sips -g pixelWidth -g pixelHeight artifacts/01-before-click.png | tee artifacts/screenshot-size.txt
-
           # macos-15 runners use a small fixed display. Avoid AppleScript UI events
           # and send a direct Quartz mouse click to the known About row position.
-          cliclick m:500,395
+          # The About row center on the GitHub runner's 1024x768 desktop is around
+          # x=500, y=300. Capture only after clicking, because an early screenshot can
+          # redirect System Settings into Screen & System Audio Recording permissions.
+          cliclick m:500,300
           sleep 1
-          cliclick c:500,395
+          cliclick c:500,300
           sleep 8
 
-          screencapture -x artifacts/02-after-click.png
-          cp artifacts/02-after-click.png artifacts/screenshot.png
+          screencapture -x artifacts/screenshot.png
+          sips -g pixelWidth -g pixelHeight artifacts/screenshot.png | tee artifacts/screenshot-size.txt
 
       - name: Start interactive tmate session
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_session == 'true' }}
