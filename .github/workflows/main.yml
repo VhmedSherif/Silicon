@@ -1,37 +1,40 @@
-name: Get macOS Sequoia Screenshot
+name: Get macOS Sequoia Screenshot (Patient Mode)
 on: [push, workflow_dispatch]
 
 jobs:
   take-screenshot:
     runs-on: macos-15
     steps:
-      - name: Open About Settings and Click About
+      - name: Open Settings and Wait Patiently
         run: |
-          # 1. فتح إعدادات النظام على صفحة General
+          # 1. فتح إعدادات النظام مباشرة على صفحة General
           open "x-apple.systempreferences:com.apple.About-Settings.extension"
-          sleep 5
           
-          # 2. تشغيل AppleScript ذكي يبحث عن زر "About" ويضغط عليه مهما كان مكانه
+          # 2. الانتظار طويلاً (15 ثانية) لضمان تحميل الواجهة بالكامل
+          # image_26.png أثبتت أن 5 ثواني غير كافية
+          sleep 15
+          
+          # 3. استخدام AppleScript متقدم للضغط على "About"
+          # الكود ده هيبحث في كل العناصر عن زر اسمه "About" ويضغط عليه
           osascript -e '
           tell application "System Settings" to activate
-          delay 2
+          delay 3
           tell application "System Events"
               tell process "System Settings"
                   try
-                      -- البحث عن أول عنصر اسمه "About" جوة النافذة والضغط عليه
-                      set aboutBtn to (first UI element of entire contents of window 1 whose name is "About")
-                      click aboutBtn
+                      -- البحث عن الزر والضغط عليه، مهما كان موقعه في Sequoia
+                      click (first UI element of entire contents of window 1 whose name is "About")
                       delay 3
                   on error err
-                      log "Error finding About button: " & err
+                      log "Error clicking About: " & err
                   end try
               end tell
           end tell
           '
+          # وقت إضافي لتثبيت الواجهة الجديدة
+          sleep 5
           
-      - name: Capture Screen
-        run: |
-          # 3. لقط الشاشة بدون صوت وحفظها
+          # 4. أخذ لقطة الشاشة بدون صوت وحفظها
           screencapture -x screenshot.png
 
       - name: Upload Artifact
