@@ -8,18 +8,18 @@ jobs:
   take-screenshot:
     runs-on: macos-15
     steps:
-      - name: Install click tool
+      - name: Install click and image tools
         run: |
-          # حل مشكلة الـ Homebrew وتخطي حماية الـ Tap غير الموثوقة
           brew untap aws/tap || true
           HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install cliclick
+          python3 -m pip install --user pillow --break-system-packages || python3 -m pip install --user pillow
 
-      - name: Set Clean Mac Name
+      - name: Set clean Mac name
         run: |
-          # ضبط اسم الجهاز ليظهر نظيفاً وتلقائياً في نافذة الإعدادات
           sudo scutil --set ComputerName "Ahmed's Mac"
           sudo scutil --set HostName "Ahmeds-Mac"
           sudo scutil --set LocalHostName "Ahmeds-Mac"
+          dscacheutil -flushcache
 
       - name: Open About pane and click About row
         run: |
@@ -29,94 +29,97 @@ jobs:
           open "x-apple.systempreferences:com.apple.About-Settings.extension"
           sleep 10
 
-          # الضغط على زرار About باستخدام الإحداثيات
           cliclick m:500,300
           sleep 1
           cliclick c:500,300
           sleep 8
 
           screencapture -x artifacts/screenshot.png
+          sips -g pixelWidth -g pixelHeight artifacts/screenshot.png | tee artifacts/screenshot-size.txt
 
       - name: Patch screenshot with Pillow
         run: |
-          # إضافة --break-system-packages لتخطي خطأ الـ externally-managed-environment
-          pip3 install pillow --break-system-packages
-          cat << 'EOF' > patch_screenshot.py
-          import os
+          set -euxo pipefail
+          python3 <<'PY'
+          from pathlib import Path
           from PIL import Image, ImageDraw, ImageFont
 
-          img_path = 'artifacts/screenshot.png'
-          if not os.path.exists(img_path):
-              print("Screenshot not found!")
-              exit(1)
-
-          img = Image.open(img_path)
-          w_img, h_img = img.size
-
-          scale_x = w_img / 1024.0
-          scale_y = h_img / 768.0
-
+          image_path = Path("artifacts/screenshot.png")
+          img = Image.open(image_path).convert("RGBA")
           draw = ImageDraw.Draw(img)
+          scale_x = img.width / 1024.0
+          scale_y = img.height / 768.0
 
-          # البحث عن خطوط النظام الأساسية للماك
-          font_paths = [
-              "/System/Library/Fonts/SFPro.ttf",
-              "/System/Library/Fonts/SFProText-Regular.otf",
-              "/System/Library/Fonts/SFProText.ttf",
-              "/System/Library/Fonts/Core/SFPro.ttf",
-              "/System/Library/Fonts/Core/SFProText.ttf",
-              "/Library/Fonts/Arial.ttf"
-          ]
-          font_path = None
-          for path in font_paths:
-              if os.path.exists(path):
-                  font_path = path
-                  break
+          def scaled_box(box):
+              return tuple(int(v * (scale_x if i % 2 == 0 else scale_y)) for i, v in enumerate(box))
 
-          font_regular = ImageFont.truetype(font_path, int(13 * scale_y)) if font_path else ImageFont.load_default()
-          
-          font_bold_path = None
-          for path in ["/System/Library/Fonts/SFProDisplay-Bold.ttf", "/System/Library/Fonts/SFPro-Bold.ttf", "/System/Library/Fonts/Core/SFPro-Bold.ttf", font_path]:
-              if path and os.path.exists(path):
-                  font_bold_path = path
-                  break
-          font_header_bold = ImageFont.truetype(font_bold_path, int(20 * scale_y)) if font_bold_path else ImageFont.load_default()
+          def scaled_point(point):
+              return (int(point[0] * scale_x), int(point[1] * scale_y))
 
-          # 1. تعديل "Apple Virtual Machine 1" -> "Mac mini"
-          bg_color = img.getpixel((int(380 * scale_x), int(335 * scale_y)))
-          draw.rectangle([int(440 * scale_x), int(318 * scale_y), int(770 * scale_x), int(360 * scale_y)], fill=bg_color)
-          text_header = "Mac mini"
-          if font_bold_path:
-              w_text = draw.textlength(text_header, font=font_header_bold)
-              draw.text((int(605 * scale_x) - w_text/2, int(325 * scale_y)), text_header, fill="#1D1D1F", font=font_header_bold)
-          else:
-              draw.text((int(560 * scale_x), int(325 * scale_y)), text_header, fill="#1D1D1F")
+          def font(candidates, size):
+              for candidate in candidates:
+                  path = Path(candidate)
+                  if path.exists():
+                      return ImageFont.truetype(str(path), int(size * scale_y))
+              return ImageFont.load_default()
 
-          # 2. تعديل "Apple M1 (Virtual)" -> "Apple M1"
-          draw.rectangle([int(700 * scale_x), int(448 * scale_y), int(825 * scale_x), int(468 * scale_y)], fill="#FFFFFF")
-          text_chip = "Apple M1"
-          w_chip = draw.textlength(text_chip, font=font_regular)
-          draw.text((int(818 * scale_x) - w_chip, int(451 * scale_y)), text_chip, fill="#1D1D1F", font=font_regular)
+          regular = font([
+              "/System/Library/Fonts/Supplemental/Arial.ttf",
+              "/Library/Fonts/Arial.ttf",
+          ], 14)
+          bold = font([
+              "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+              "/Library/Fonts/Arial Bold.ttf",
+              "/System/Library/Fonts/Supplemental/Arial.ttf",
+          ], 29)
 
-          # 3. تعديل "7 GB" -> "16 GB"
-          draw.rectangle([int(780 * scale_x), int(496 * scale_y), int(825 * scale_x), int(516 * scale_y)], fill="#FFFFFF")
-          text_mem = "16 GB"
-          w_mem = draw.textlength(text_mem, font=font_regular)
-          draw.text((int(818 * scale_x) - w_mem, int(499 * scale_y)), text_mem, fill="#1D1D1F", font=font_regular)
+          page_bg = (242, 242, 242, 255)
+          row_bg = (242, 242, 242, 255)
+          dark = (29, 29, 31, 255)
+          value = (100, 100, 100, 255)
 
-          # 4. تعديل شاشة العرض: "Apple Virtual Display" -> "LG UltraFine 4K"
-          draw.rectangle([int(430 * scale_x), int(615 * scale_y), int(825 * scale_x), int(635 * scale_y)], fill="#FFFFFF")
-          text_disp = "LG UltraFine 4K"
-          draw.text((int(430 * scale_x), int(615 * scale_y)), text_disp, fill="#1D1D1F", font=font_regular)
-          
-          text_res = "27-inch (3840 x 2160)"
-          w_res = draw.textlength(text_res, font=font_regular)
-          draw.text((int(818 * scale_x) - w_res, int(615 * scale_y)), text_res, fill="#1D1D1F", font=font_regular)
+          def erase(box, fill):
+              draw.rectangle(scaled_box(box), fill=fill)
 
-          img.save(img_path)
-          print("Screenshot patched successfully!")
-          EOF
-          python3 patch_screenshot.py
+          def text_size(text, used_font):
+              box = draw.textbbox((0, 0), text, font=used_font)
+              return box[2] - box[0], box[3] - box[1]
+
+          def centered_text(box, text, used_font, fill):
+              box = scaled_box(box)
+              width, height = text_size(text, used_font)
+              x = box[0] + ((box[2] - box[0]) - width) / 2
+              y = box[1] + ((box[3] - box[1]) - height) / 2 - 1
+              draw.text((x, y), text, font=used_font, fill=fill)
+
+          def right_text(box, text, used_font, fill):
+              box = scaled_box(box)
+              width, height = text_size(text, used_font)
+              x = box[2] - width
+              y = box[1] + ((box[3] - box[1]) - height) / 2
+              draw.text((x, y), text, font=used_font, fill=fill)
+
+          # Coordinates are based on the verified 1024x768 macos-15 About screenshot.
+          erase((390, 244, 850, 284), page_bg)
+          centered_text((390, 244, 850, 284), "Mac mini", bold, dark)
+
+          erase((430, 304, 842, 326), row_bg)
+          draw.text(scaled_point((434, 308)), "Ahmed's Mac", font=regular, fill=value)
+
+          erase((700, 341, 842, 363), row_bg)
+          right_text((700, 341, 839, 363), "Apple M1", regular, value)
+
+          erase((760, 378, 842, 399), row_bg)
+          right_text((760, 378, 839, 399), "16 GB", regular, value)
+
+          erase((436, 625, 665, 646), row_bg)
+          draw.text(scaled_point((442, 628)), "LG UltraFine 4K", font=regular, fill=dark)
+
+          erase((690, 625, 842, 646), row_bg)
+          right_text((690, 625, 839, 646), "27-inch (3840 x 2160)", regular, value)
+
+          img.save(image_path)
+          PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
