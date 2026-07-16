@@ -5,15 +5,33 @@ jobs:
   take-screenshot:
     runs-on: macos-15
     steps:
-      - name: Open About Settings
+      - name: Open About Page and Take Screenshot
         run: |
-          # فتح صفحة About في إعدادات النظام مباشرة
+          # 1. فتح إعدادات النظام على صفحة General
           open "x-apple.systempreferences:com.apple.About-Settings.extension"
-          sleep 10
+          sleep 5
           
-      - name: Capture Screen
-        run: |
-          # أخذ لقطة شاشة بدون صوت وحفظها
+          # 2. استخدام AppleScript للضغط على زر About لضمان فتح الصفحة المطلوبة
+          osascript -e '
+          tell application "System Settings" to activate
+          delay 2
+          tell application "System Events"
+              tell process "System Settings"
+                  try
+                      -- محاولة الضغط على زر About
+                      click UI element "About" of group 1 of scroll area 1 of group 1 of group 2 of splitted group 1 of window 1
+                  on error
+                      try
+                          -- محاولة بديلة لو الهيكل مختلف
+                          click button "About" of group 1 of scroll area 1 of group 1 of group 2 of splitted group 1 of window 1
+                      end try
+                  end try
+              end tell
+          end tell
+          '
+          sleep 3
+          
+          # 3. أخذ لقطة الشاشة وحفظها
           screencapture -x screenshot.png
 
       - name: Upload Artifact
