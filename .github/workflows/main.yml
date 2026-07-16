@@ -29,7 +29,7 @@ jobs:
           open "x-apple.systempreferences:com.apple.About-Settings.extension"
           sleep 10
 
-          # الضغط على زرار About باستخدام الإحداثيات اللي اشتغلت مع كودكس
+          # الضغط على زرار About باستخدام الإحداثيات
           cliclick m:500,300
           sleep 1
           cliclick c:500,300
@@ -39,7 +39,8 @@ jobs:
 
       - name: Patch screenshot with Pillow
         run: |
-          pip3 install pillow
+          # إضافة --break-system-packages لتخطي خطأ الـ externally-managed-environment
+          pip3 install pillow --break-system-packages
           cat << 'EOF' > patch_screenshot.py
           import os
           from PIL import Image, ImageDraw, ImageFont
