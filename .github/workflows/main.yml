@@ -5,16 +5,20 @@ jobs:
   vnc-connect:
     runs-on: macos-15
     steps:
+      - name: Set Runner Password
+        run: |
+          # تغيير باسورد مستخدم الـ runner ليكون 123456
+          sudo dscl . -passwd /Users/runner 123456 || echo "123456" | sudo passwd runner
+
       - name: Enable macOS Screen Sharing (VNC)
         run: |
-          # تفعيل مشاركة الشاشة وضبط كلمة مرور الـ VNC لتكون 123456
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -clientopts -setvnclegacy -vnclegacy yes -clientopts -setvncpw -vncpw 123456 -restart -agent -privs -all || true
+          # تفعيل مشاركة الشاشة بأمر نظيف متوافق مع macOS 15 وبدون الخيارات الملغية
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -privs -all -restart -agent
 
       - name: Download and Configure Ngrok
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         run: |
-          # تحميل نسخة ngrok الخاصة بمعالجات أبل سيليكون مباشرة لتجنب مشاكل Homebrew
           curl -L -o ngrok.zip https://bin.equinox.io/c/b34t2HbgKoD/ngrok-v3-stable-darwin-arm64.zip
           unzip ngrok.zip
           chmod +x ./ngrok
@@ -22,11 +26,9 @@ jobs:
 
       - name: Start Ngrok Tunnel
         run: |
-          # فتح نفق للبورت 5900 الخاص بالـ VNC
           ./ngrok tcp 5900 --log=stdout &
           sleep 10
           
-          # استخراج رابط الاتصال من الـ API الخاص بـ Ngrok وطباعته
           echo "=========================================================="
           echo "Connect to this address using your VNC Viewer:"
           curl --silent http://127.0.0.1:4040/api/tunnels | grep -o 'tcp://[^"]*'
