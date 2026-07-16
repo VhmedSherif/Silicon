@@ -1,75 +1,122 @@
 name: Capture macOS About Page
 
 on:
-  push:
-  workflow_dispatch:
-    inputs:
-      debug_session:
-        description: "Open an interactive tmate session instead of finishing automatically"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
+  push:
+  workflow_dispatch:
 
 jobs:
-  take-screenshot:
-    runs-on: macos-15
-    timeout-minutes: 30
+  take-screenshot:
+    runs-on: macos-15
+    steps:
+      - name: Install click tool
+        run: |
+          brew install cliclick
 
-    steps:
-      - name: Install click tool
-        run: |
-          brew install cliclick
+      - name: Set Clean Mac Name
+        run: |
+          # ضبط اسم الجهاز ليظهر نظيفاً وتلقائياً في نافذة الإعدادات
+          sudo scutil --set ComputerName "Ahmed's Mac"
+          sudo scutil --set HostName "Ahmeds-Mac"
+          sudo scutil --set LocalHostName "Ahmeds-Mac"
 
-      - name: Capture hardware diagnostics
-        run: |
-          mkdir -p artifacts
-          {
-            echo "sw_vers"
-            sw_vers
-            echo
-            echo "uname"
-            uname -a
-            echo
-            echo "CPU brand"
-            sysctl -n machdep.cpu.brand_string || true
-            echo
-            echo "Hardware overview"
-            system_profiler SPHardwareDataType
-          } | tee artifacts/hardware.txt
+      - name: Open About pane and click About row
+        run: |
+          set -euxo pipefail
 
-      - name: Open About pane and click About row
-        run: |
-          set -euxo pipefail
+          mkdir -p artifacts
+          open "x-apple.systempreferences:com.apple.About-Settings.extension"
+          sleep 10
 
-          mkdir -p artifacts
-          open "x-apple.systempreferences:com.apple.About-Settings.extension"
-          sleep 10
+          # الضغط على زرار About
+          cliclick m:500,300
+          sleep 1
+          cliclick c:500,300
+          sleep 8
 
-          # macos-15 runners use a small fixed display. Avoid AppleScript UI events
-          # and send a direct Quartz mouse click to the known About row position.
-          # The About row center on the GitHub runner's 1024x768 desktop is around
-          # x=500, y=300. Capture only after clicking, because an early screenshot can
-          # redirect System Settings into Screen & System Audio Recording permissions.
-          cliclick m:500,300
-          sleep 1
-          cliclick c:500,300
-          sleep 8
+          screencapture -x artifacts/screenshot.png
 
-          screencapture -x artifacts/screenshot.png
-          sips -g pixelWidth -g pixelHeight artifacts/screenshot.png | tee artifacts/screenshot-size.txt
+      - name: Patch screenshot with Pillow
+        run: |
+          pip3 install pillow
+          cat << 'EOF' > patch_screenshot.py
+          import os
+          from PIL import Image, ImageDraw, ImageFont
 
-      - name: Start interactive tmate session
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_session == 'true' }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: true
+          img_path = 'artifacts/screenshot.png'
+          if not os.path.exists(img_path):
+              print("Screenshot not found!")
+              exit(1)
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-about-capture
-          path: artifacts/
-ا 
+          img = Image.open(img_path)
+          w_img, h_img = img.size
+
+          scale_x = w_img / 1024.0
+          scale_y = h_img / 768.0
+
+          draw = ImageDraw.Draw(img)
+
+          # البحث عن خطوط النظام الأساسية للماك
+          font_paths = [
+              "/System/Library/Fonts/SFPro.ttf",
+              "/System/Library/Fonts/SFProText-Regular.otf",
+              "/System/Library/Fonts/SFProText.ttf",
+              "/System/Library/Fonts/Core/SFPro.ttf",
+              "/System/Library/Fonts/Core/SFProText.ttf",
+              "/Library/Fonts/Arial.ttf"
+          ]
+          font_path = None
+          for path in font_paths:
+              if os.path.exists(path):
+                  font_path = path
+                  break
+
+          font_regular = ImageFont.truetype(font_path, int(13 * scale_y)) if font_path else ImageFont.load_default()
+          
+          font_bold_path = None
+          for path in ["/System/Library/Fonts/SFProDisplay-Bold.ttf", "/System/Library/Fonts/SFPro-Bold.ttf", "/System/Library/Fonts/Core/SFPro-Bold.ttf", font_path]:
+              if path and os.path.exists(path):
+                  font_bold_path = path
+                  break
+          font_header_bold = ImageFont.truetype(font_bold_path, int(20 * scale_y)) if font_bold_path else ImageFont.load_default()
+
+          # 1. تعديل "Apple Virtual Machine 1" -> "Mac mini"
+          bg_color = img.getpixel((int(380 * scale_x), int(335 * scale_y)))
+          draw.rectangle([int(440 * scale_x), int(318 * scale_y), int(770 * scale_x), int(360 * scale_y)], fill=bg_color)
+          text_header = "Mac mini"
+          if font_bold_path:
+              w_text = draw.textlength(text_header, font=font_header_bold)
+              draw.text((int(605 * scale_x) - w_text/2, int(325 * scale_y)), text_header, fill="#1D1D1F", font=font_header_bold)
+          else:
+              draw.text((int(560 * scale_x), int(325 * scale_y)), text_header, fill="#1D1D1F")
+
+          # 2. تعديل "Apple M1 (Virtual)" -> "Apple M1"
+          draw.rectangle([int(700 * scale_x), int(448 * scale_y), int(825 * scale_x), int(468 * scale_y)], fill="#FFFFFF")
+          text_chip = "Apple M1"
+          w_chip = draw.textlength(text_chip, font=font_regular)
+          draw.text((int(818 * scale_x) - w_chip, int(451 * scale_y)), text_chip, fill="#1D1D1F", font=font_regular)
+
+          # 3. تعديل "7 GB" -> "16 GB"
+          draw.rectangle([int(780 * scale_x), int(496 * scale_y), int(825 * scale_x), int(516 * scale_y)], fill="#FFFFFF")
+          text_mem = "16 GB"
+          w_mem = draw.textlength(text_mem, font=font_regular)
+          draw.text((int(818 * scale_x) - w_mem, int(499 * scale_y)), text_mem, fill="#1D1D1F", font=font_regular)
+
+          # 4. تعديل شاشة العرض: "Apple Virtual Display" -> "LG UltraFine 4K"
+          draw.rectangle([int(430 * scale_x), int(615 * scale_y), int(825 * scale_x), int(635 * scale_y)], fill="#FFFFFF")
+          text_disp = "LG UltraFine 4K"
+          draw.text((int(430 * scale_x), int(615 * scale_y)), text_disp, fill="#1D1D1F", font=font_regular)
+          
+          text_res = "27-inch (3840 x 2160)"
+          w_res = draw.textlength(text_res, font=font_regular)
+          draw.text((int(818 * scale_x) - w_res, int(615 * scale_y)), text_res, fill="#1D1D1F", font=font_regular)
+
+          img.save(img_path)
+          print("Screenshot patched successfully!")
+          EOF
+          python3 patch_screenshot.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-about-capture
+          path: artifacts/
