@@ -73,7 +73,7 @@ jobs:
               "/System/Library/Fonts/Supplemental/Arial.ttf",
           ], 29)
 
-          page_bg = (242, 242, 242, 255)
+          page_bg = (246, 246, 246, 255)
           row_bg = (242, 242, 242, 255)
           dark = (29, 29, 31, 255)
           value = (100, 100, 100, 255)
@@ -100,10 +100,11 @@ jobs:
               draw.text((x, y), text, font=used_font, fill=fill)
 
           # Coordinates are based on the verified 1024x768 macos-15 About screenshot.
-          erase((390, 244, 850, 284), page_bg)
-          centered_text((390, 244, 850, 284), "Mac mini", bold, dark)
+          erase((450, 244, 790, 284), page_bg)
+          centered_text((450, 244, 790, 284), "Mac mini", bold, dark)
 
-          erase((430, 304, 842, 326), row_bg)
+          erase((398, 304, 842, 326), row_bg)
+          draw.text(scaled_point((400, 308)), "Name", font=regular, fill=dark)
           draw.text(scaled_point((434, 308)), "Ahmed's Mac", font=regular, fill=value)
 
           erase((700, 341, 842, 363), row_bg)
