@@ -1,38 +1,41 @@
-name: Connect to macOS VNC
+name: Get macOS Sequoia Screenshot
 on: [push, workflow_dispatch]
 
 jobs:
-  vnc-connect:
+  take-screenshot:
     runs-on: macos-15
     steps:
-      - name: Set Runner Password
+      - name: Open About Settings and Click About
         run: |
-          # تغيير باسورد مستخدم الـ runner ليكون 123456
-          sudo dscl . -passwd /Users/runner 123456 || echo "123456" | sudo passwd runner
-
-      - name: Enable macOS Screen Sharing (VNC)
-        run: |
-          # تفعيل مشاركة الشاشة بأمر نظيف متوافق مع macOS 15 وبدون الخيارات الملغية
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -privs -all -restart -agent
-
-      - name: Download and Configure Ngrok
-        env:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        run: |
-          curl -L -o ngrok.zip https://bin.equinox.io/c/b34t2HbgKoD/ngrok-v3-stable-darwin-arm64.zip
-          unzip ngrok.zip
-          chmod +x ./ngrok
-          ./ngrok config add-authtoken $NGROK_AUTH_TOKEN
-
-      - name: Start Ngrok Tunnel
-        run: |
-          ./ngrok tcp 5900 --log=stdout &
-          sleep 10
+          # 1. فتح إعدادات النظام على صفحة General
+          open "x-apple.systempreferences:com.apple.About-Settings.extension"
+          sleep 5
           
-          echo "=========================================================="
-          echo "Connect to this address using your VNC Viewer:"
-          curl --silent http://127.0.0.1:4040/api/tunnels | grep -o 'tcp://[^"]*'
-          echo "=========================================================="
+          # 2. تشغيل AppleScript ذكي يبحث عن زر "About" ويضغط عليه مهما كان مكانه
+          osascript -e '
+          tell application "System Settings" to activate
+          delay 2
+          tell application "System Events"
+              tell process "System Settings"
+                  try
+                      -- البحث عن أول عنصر اسمه "About" جوة النافذة والضغط عليه
+                      set aboutBtn to (first UI element of entire contents of window 1 whose name is "About")
+                      click aboutBtn
+                      delay 3
+                  on error err
+                      log "Error finding About button: " & err
+                  end try
+              end tell
+          end tell
+          '
           
-          # إبقاء السيرفر شغال لمدة ساعة كاملة لتتحكم فيه براحتك
-          sleep 3600
+      - name: Capture Screen
+        run: |
+          # 3. لقط الشاشة بدون صوت وحفظها
+          screencapture -x screenshot.png
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-screenshot
+          path: screenshot.png
