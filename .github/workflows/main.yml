@@ -1,149 +1,75 @@
 name: Capture macOS About Page
 
-
-
 on:
-
-  push:
-
-  workflow_dispatch:
-
-    inputs:
-
-      debug_session:
-
-        description: "Open an interactive tmate session instead of finishing automatically"
-
-        required: false
-
-        default: "false"
-
-        type: choice
-
-        options:
-
-          - "false"
-
-          - "true"
-
-
+  push:
+  workflow_dispatch:
+    inputs:
+      debug_session:
+        description: "Open an interactive tmate session instead of finishing automatically"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
-
-  take-screenshot:
-
-    runs-on: macos-15
-
-    timeout-minutes: 30
-
-
-
-    steps:
-
-      - name: Install click tool
-
-        run: |
-
-          brew install cliclick
-
-
-
-      - name: Capture hardware diagnostics
-
-        run: |
-
-          mkdir -p artifacts
-
-          {
-
-            echo "sw_vers"
-
-            sw_vers
-
-            echo
-
-            echo "uname"
-
-            uname -a
-
-            echo
-
-            echo "CPU brand"
-
-            sysctl -n machdep.cpu.brand_string || true
-
-            echo
-
-            echo "Hardware overview"
-
-            system_profiler SPHardwareDataType
-
-          } | tee artifacts/hardware.txt
-
-
-
-      - name: Open About pane and click About row
-
-        run: |
-
-          set -euxo pipefail
-
-
-
-          mkdir -p artifacts
-
-          open "x-apple.systempreferences:com.apple.About-Settings.extension"
-
-          sleep 10
-
-
-
-          # macos-15 runners use a small fixed display. Avoid AppleScript UI events
-
-          # and send a direct Quartz mouse click to the known About row position.
-
-          # The About row center on the GitHub runner's 1024x768 desktop is around
-
-          # x=500, y=300. Capture only after clicking, because an early screenshot can
-
-          # redirect System Settings into Screen & System Audio Recording permissions.
-
-          cliclick m:500,300
-
-          sleep 1
-
-          cliclick c:500,300
-
-          sleep 8
-
-
-
-          screencapture -x artifacts/screenshot.png
-
-          sips -g pixelWidth -g pixelHeight artifacts/screenshot.png | tee artifacts/screenshot-size.txt
-
-
-
-      - name: Start interactive tmate session
-
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_session == 'true' }}
-
-        uses: mxschmitt/action-tmate@v3
-
-        with:
-
-          limit-access-to-actor: true
-
-
-
-      - name: Upload artifact
-
-        uses: actions/upload-artifact@v4
-
-        with:
-
-          name: macos-about-capture
-
-          path: artifacts/
-
-ا
+  take-screenshot:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Install click tool
+        run: |
+          brew install cliclick
+
+      - name: Capture hardware diagnostics
+        run: |
+          mkdir -p artifacts
+          {
+            echo "sw_vers"
+            sw_vers
+            echo
+            echo "uname"
+            uname -a
+            echo
+            echo "CPU brand"
+            sysctl -n machdep.cpu.brand_string || true
+            echo
+            echo "Hardware overview"
+            system_profiler SPHardwareDataType
+          } | tee artifacts/hardware.txt
+
+      - name: Open About pane and click About row
+        run: |
+          set -euxo pipefail
+
+          mkdir -p artifacts
+          open "x-apple.systempreferences:com.apple.About-Settings.extension"
+          sleep 10
+
+          # macos-15 runners use a small fixed display. Avoid AppleScript UI events
+          # and send a direct Quartz mouse click to the known About row position.
+          # The About row center on the GitHub runner's 1024x768 desktop is around
+          # x=500, y=300. Capture only after clicking, because an early screenshot can
+          # redirect System Settings into Screen & System Audio Recording permissions.
+          cliclick m:500,300
+          sleep 1
+          cliclick c:500,300
+          sleep 8
+
+          screencapture -x artifacts/screenshot.png
+          sips -g pixelWidth -g pixelHeight artifacts/screenshot.png | tee artifacts/screenshot-size.txt
+
+      - name: Start interactive tmate session
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_session == 'true' }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-about-capture
+          path: artifacts/
+ا 
