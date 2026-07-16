@@ -1,41 +1,33 @@
-name: Get macOS Sequoia Screenshot
+name: Connect to macOS VNC
 on: [push, workflow_dispatch]
 
 jobs:
-  take-screenshot:
+  vnc-connect:
     runs-on: macos-15
     steps:
-      - name: Open About Page and Take Screenshot
+      - name: Enable macOS Screen Sharing (VNC)
         run: |
-          # 1. فتح إعدادات النظام على صفحة General
-          open "x-apple.systempreferences:com.apple.About-Settings.extension"
-          sleep 5
-          
-          # 2. استخدام AppleScript للضغط على زر About لضمان فتح الصفحة المطلوبة
-          osascript -e '
-          tell application "System Settings" to activate
-          delay 2
-          tell application "System Events"
-              tell process "System Settings"
-                  try
-                      -- محاولة الضغط على زر About
-                      click UI element "About" of group 1 of scroll area 1 of group 1 of group 2 of splitted group 1 of window 1
-                  on error
-                      try
-                          -- محاولة بديلة لو الهيكل مختلف
-                          click button "About" of group 1 of scroll area 1 of group 1 of group 2 of splitted group 1 of window 1
-                      end try
-                  end try
-              end tell
-          end tell
-          '
-          sleep 3
-          
-          # 3. أخذ لقطة الشاشة وحفظها
-          screencapture -x screenshot.png
+          # تفعيل مشاركة الشاشة وضبط كلمة مرور الـ VNC لتكون 123456
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -clientopts -setvnclegacy -vnclegacy yes -clientopts -setvncpw -vncpw 123456 -restart -agent -privs -all
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-screenshot
-          path: screenshot.png
+      - name: Install and Configure Ngrok
+        env:
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+        run: |
+          brew install ngrok
+          ngrok config add-authtoken $NGROK_AUTH_TOKEN
+
+      - name: Start Ngrok Tunnel
+        run: |
+          # فتح نفق للبورت 5900 الخاص بالـ VNC
+          ngrok tcp 5900 --log=stdout &
+          sleep 10
+          
+          # استخراج رابط الاتصال من الـ API الخاص بـ Ngrok وطباعته
+          echo "=========================================================="
+          echo "Connect to this address using your VNC Viewer:"
+          curl --silent http://127.0.0.1:4040/api/tunnels | grep -o 'tcp://[^"]*'
+          echo "=========================================================="
+          
+          # إبقاء السيرفر شغال لمدة ساعة كاملة لتتحكم فيه براحتك
+          sleep 3600
