@@ -1,40 +1,42 @@
-name: Get macOS Sequoia Screenshot (Patient Mode)
+name: Get macOS Sequoia Screenshot (Direct Reveal)
 on: [push, workflow_dispatch]
 
 jobs:
   take-screenshot:
     runs-on: macos-15
     steps:
-      - name: Open Settings and Wait Patiently
+      - name: Reveal About Pane and Emulate Keys
         run: |
-          # 1. فتح إعدادات النظام مباشرة على صفحة General
-          open "x-apple.systempreferences:com.apple.About-Settings.extension"
-          
-          # 2. الانتظار طويلاً (15 ثانية) لضمان تحميل الواجهة بالكامل
-          # image_26.png أثبتت أن 5 ثواني غير كافية
-          sleep 15
-          
-          # 3. استخدام AppleScript متقدم للضغط على "About"
-          # الكود ده هيبحث في كل العناصر عن زر اسمه "About" ويضغط عليه
+          # 1. أمر النظام بفتح صفحة About مباشرة بدون كليكات
           osascript -e '
-          tell application "System Settings" to activate
-          delay 3
-          tell application "System Events"
-              tell process "System Settings"
-                  try
-                      -- البحث عن الزر والضغط عليه، مهما كان موقعه في Sequoia
-                      click (first UI element of entire contents of window 1 whose name is "About")
-                      delay 3
-                  on error err
-                      log "Error clicking About: " & err
-                  end try
-              end tell
+          tell application "System Settings"
+              activate
+              delay 3
+              reveal pane id "com.apple.About-Settings.extension"
           end tell
           '
-          # وقت إضافي لتثبيت الواجهة الجديدة
+          sleep 5
+
+          # 2. خطوة احتياطية: كتابة About والضغط على Enter كأنك بتكتب بكيبورد حقيقي
+          osascript -e '
+          tell application "System Settings" to activate
+          delay 2
+          tell application "System Events"
+              -- كتابة الكلمة في خانة البحث
+              keystroke "About"
+              delay 2
+              -- الضغط على Enter لتحديد نتيجة البحث الأولى
+              key code 36
+              delay 2
+              -- الضغط على Enter مرة أخرى لفتح الصفحة
+              key code 36
+          end tell
+          '
           sleep 5
           
-          # 4. أخذ لقطة الشاشة بدون صوت وحفظها
+      - name: Capture Screen
+        run: |
+          # 3. لقط الشاشة وحفظها
           screencapture -x screenshot.png
 
       - name: Upload Artifact
